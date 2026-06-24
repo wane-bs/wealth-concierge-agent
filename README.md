@@ -1,4 +1,136 @@
-# 💰 Personal Wealth Concierge Agent (Trợ lý Tài chính & Cảnh báo Sớm)
+# 💰 Personal Wealth Concierge Agent (Portfolio Management & Early Volatility Alert)
+
+A submission for the **AI Agents Intensive Vibe Coding Capstone Project (Kaggle)**.
+The system is a multi-agent **Personal Wealth Concierge Agent** built on **Google ADK** and integrated with the **Vnstock** financial library. It manages a virtual stock portfolio, monitors real-time market fluctuations, and automatically sends early email alerts on significant price deviations.
+
+---
+
+## 🏛️ Multi-Agent Architecture (Google ADK)
+
+The system adopts a **Root Orchestrator** pattern to handle conversation requests (LLM Delegation) and direct the workflow to three specialized Sub-agents based on user needs:
+
+```mermaid
+flowchart TD
+    User([User]) <-->|Chat Interface / Web UI| Root[Root Orchestrator Agent]
+    
+    subgraph "Multi-Agent System (Google ADK)"
+        Root <-->|Delegates portfolio tasks| PM[Portfolio Manager Agent]
+        Root <-->|Delegates news & fundamental analysis| WA[Wealth Advisor Agent]
+        Root <-->|Triggers market scans| MS[Market Sentinel Agent]
+    end
+
+    subgraph "Data & Protocol Layers"
+        PM <-->|Read / Write| JSON[(portfolio.json)]
+        WA <-->|Quotes / Ratios / News| VS[Vnstock Tools]
+        MS -->|Live price scans| VS
+        MS -->|Volatility Alerts| SMTP[Email Alert - SMTP]
+    end
+```
+
+### 1. Root Orchestrator Agent
+*   Welcomes the user (Mr.Híu), analyzes intents, and delegates conversational control to the appropriate Sub-agent.
+
+### 2. Portfolio Manager Agent
+*   Manages the user's asset holdings, which are stored locally in a secure configuration file `app/portfolio.json`.
+*   **Tools:** `get_portfolio`, `add_to_portfolio`, `remove_from_portfolio`.
+
+### 3. Wealth Advisor Agent
+*   Conducts in-depth valuation and financial news analysis to support Buy/Sell/Hold investment decisions.
+*   **Tools:** Live market quote retrieval (`get_stock_quote`), corporate news (`get_stock_news`), and financial ratios for the last 4 quarters (`get_financial_ratios`).
+
+### 4. Market Sentinel Agent
+*   Monitors live stock prices in real-time.
+*   **Tools:** Initiates manual scans of the entire portfolio and calculates price deviations against the cost basis (`run_market_scan`). Automatically drafts professional HTML reports and sends them via email.
+
+---
+
+## 🛠️ Installation & Configuration
+
+### 1. System Requirements
+*   Python 3.11 or 3.12 (Recommended).
+*   **uv** package manager and **google-agents-cli**.
+
+### 2. Install Dependencies
+Navigate to the project directory and run the sync command to set up the `.venv` virtual environment and automatically install packages:
+```bash
+cd wealth-concierge-agent
+agents-cli install
+```
+
+### 3. Environment Variables Configuration
+Make a copy of `.env.example` as `.env` under the `app/` folder, and fill in the required fields:
+```env
+# Google AI Studio Configuration (Required for LLM)
+GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
+
+# SMTP Configurations for Email Alerts (e.g., using Gmail)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_sender_email@gmail.com
+SMTP_PASSWORD=your_gmail_app_password  # 16-character Gmail App Password
+RECIPIENT_EMAIL=your_recipient_email@gmail.com # Alert destination email
+
+# Sentinel Scan Interval (minutes)
+SCAN_INTERVAL_MINUTES=10
+```
+
+---
+
+## 🚀 Execution Guide
+
+### 1. Run Web Dashboard & Chatbot (Streamlit)
+The Streamlit interface provides a dashboard to track portfolio asset allocations, market value structures, and a chat window to interact with the AI Agent:
+```bash
+.venv\Scripts\streamlit run dashboard.py
+```
+
+### 2. Run Sentinel Daemon (Background Price Scanner)
+The Sentinel Daemon runs separately 24/7. It automatically scans Vnstock data every **10 minutes**, compares live prices with cost bases, and proactively sends email alerts if price fluctuations exceed +/-3%.
+```bash
+.venv\Scripts\python app/sentinel_daemon.py
+```
+
+### 3. Run Mock Tests (Automated Logic Verification)
+Simulate stock price movements (e.g., FPT price rising by 10%) and verify the email generator logic without making network calls:
+```bash
+.venv\Scripts\python tests/test_sentinel_mock.py
+```
+
+### 4. Run Agent Quality Evaluation (Eval)
+To execute the evaluations defined in Google Agents CLI, authorize Application Default Credentials (ADC) in your terminal and run the evaluator:
+```bash
+# Authorize Google Cloud SDK
+gcloud auth application-default login
+
+# Execute agent evaluation
+agents-cli eval run
+```
+The test cases are located at `tests/eval/datasets/basic-dataset.json`, covering greeting, portfolio review, stock analysis, and alerting workflows.
+
+---
+
+## 🌍 Bilingual Support
+
+The system is fully designed with bilingual capabilities (**English** and **Vietnamese**), prioritizing **English** by default:
+* **Web UI**: Users can toggle between languages using the sidebar dropdown on Streamlit. All headers, metrics, charts, tables, and buttons will reload instantly in the selected language.
+* **AI Agent Chatbot**: Switching the language reinitializes the agent's session and updates prompt instructions dynamically. The agent will converse seamlessly in the chosen language.
+
+---
+
+## 🔒 Security & Privacy Architecture
+
+The project adheres strictly to Zero-Trust data privacy guidelines:
+1. **Credentials Isolation**: API keys and SMTP credentials are loaded dynamically from `app/.env` (excluded from VCS via `.gitignore`).
+2. **Local Data Privacy**: Asset data remains locally on the user's filesystem in `app/portfolio.json`. No data is uploaded or synced to external servers.
+3. **Input Sanitization**: User-entered stock tickers are stripped and capitalized to avoid injection vulnerabilities.
+4. **Crash Resistance**: All network calls, file reads, and email connections are protected with robust exception handling blocks.
+
+---
+---
+
+# 🇻🇳 Phiên bản Tiếng Việt (Vietnamese Version)
+
+## 💰 Personal Wealth Concierge Agent (Trợ lý Tài chính & Cảnh báo Sớm)
 
 Dự án tham gia cuộc thi **AI Agents Intensive Vibe Coding Capstone Project (Kaggle)**. 
 Hệ thống là một **Trợ lý Tài chính Cá nhân đa nhiệm (Concierge Agent)** được xây dựng trên nền tảng **Google ADK** kết hợp thư viện dữ liệu chứng khoán **Vnstock**. Hệ thống quản lý danh mục đầu tư ảo, theo dõi biến động thị trường và tự động gửi email cảnh báo khi phát hiện biến động lớn.
@@ -124,4 +256,3 @@ Dự án tuân thủ nghiêm ngặt tiêu chuẩn bảo mật dữ liệu và an
 2. **Lưu trữ dữ liệu nội bộ (Local Data Privacy)**: Dữ liệu danh mục tài sản cá nhân được quản lý cục bộ thông qua tệp [app/portfolio.json](file:///f:/capstone/wealth-concierge-agent/app/portfolio.json) của người dùng. Hệ thống không sử dụng hoặc đồng bộ dữ liệu này lên bất kỳ máy chủ bên thứ ba nào ngoại trừ việc tương tác trực tuyến với thư viện Vnstock để lấy báo giá thị trường công khai.
 3. **Phòng chống lỗi đầu vào (Input Sanitization)**: Mọi mã cổ phiếu do người dùng nhập từ giao diện UI hoặc hội thoại Chatbot đều được chuẩn hóa (chuyển chữ hoa, loại bỏ khoảng trắng) và xác thực kiểu dữ liệu nghiêm ngặt trước khi ghi nhận để phòng tránh các lỗi định dạng hoặc tấn công chèn mã độc.
 4. **Kiểm tra an toàn thực thi**: Toàn bộ luồng xử lý I/O tệp tin, giao tiếp mạng (Vnstock API) và kết nối SMTP đều được bao bọc trong các khối xử lý ngoại lệ (`try-except`) giúp hệ thống vận hành bền bỉ và không gây sập ứng dụng (crash-resistant).
-
