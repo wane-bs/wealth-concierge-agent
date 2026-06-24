@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "FPT",
+    "volume": 1000,
+    "cost_basis": 65.0,
+    "alert_threshold": 3.0
+  },
+  {
+    "symbol": "VCB",
+    "volume": 500,
+    "cost_basis": 92.0,
+    "alert_threshold": 3.0
+  },
+  {
+    "symbol": "ACB",
+    "volume": 300,
+    "cost_basis": 22,
+    "alert_threshold": 8
+  }
+]

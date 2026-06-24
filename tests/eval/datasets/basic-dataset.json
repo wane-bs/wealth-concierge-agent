@@ -1,0 +1,32 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "greeting",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Chào trợ lý, bạn có thể giúp gì cho tôi?"}]
+      }
+    },
+    {
+      "eval_case_id": "view_portfolio",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Hãy hiển thị danh mục đầu tư hiện tại của tôi."}]
+      }
+    },
+    {
+      "eval_case_id": "analyze_fpt",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Phân tích mã cổ phiếu FPT giúp tôi."}]
+      }
+    },
+    {
+      "eval_case_id": "trigger_scan",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Kích hoạt hệ thống quét Sentinel giúp tôi kiểm tra danh mục."}]
+      }
+    }
+  ]
+}
