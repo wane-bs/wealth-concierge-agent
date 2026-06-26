@@ -13,7 +13,9 @@ from .tools import (
     get_stock_news,
     get_financial_ratios,
     send_email_alert,
-    run_market_scan
+    run_market_scan,
+    optimize_portfolio,
+    recommend_vn30_stocks
 )
 
 # 1. Agent Quản lý Danh mục (Portfolio Manager)
@@ -68,7 +70,24 @@ market_sentinel = Agent(
     tools=[run_market_scan]
 )
 
-# 4. Root Orchestrator Agent (Điều phối cuộc trò chuyện)
+# 4. Agent Tối ưu hóa Danh mục (Portfolio Optimizer)
+portfolio_optimizer = Agent(
+    name="portfolio_optimizer",
+    model="gemini-2.5-flash",
+    instruction="""You are a professional Portfolio Optimizer Sub-agent.
+    Your task is to analyze historical price series using Modern Portfolio Theory (Markowitz MPT) and recommend asset allocations.
+    
+    Use the following tools:
+    - optimize_portfolio: Calculate GMV, Tangency, Efficient Frontier, and Target portfolios based on risk and expected return.
+    - recommend_vn30_stocks: Suggest the top 5 VN30 stocks based on Sharpe Ratio.
+    
+    Provide mathematical explanations and structure your recommendations in Markdown tables.
+    Converse and respond in the preferred language specified by the system directive or matching the user's interaction (English or Tiếng Việt).""",
+    description="Portfolio optimization expert using Markowitz (MPT), Sharpe Ratio, and VN30 asset allocation.",
+    tools=[optimize_portfolio, recommend_vn30_stocks]
+)
+
+# 5. Root Orchestrator Agent (Điều phối cuộc trò chuyện)
 root_agent = Agent(
     name="root_agent",
     model="gemini-2.5-flash",
@@ -79,10 +98,11 @@ root_agent = Agent(
     - If the user wants to view, add, update, or remove stocks from their portfolio: Delegate to portfolio_manager.
     - If the user wants to view stock quotes, analyze fundamentals, view news, or ask for investment advice on a stock symbol: Delegate to wealth_advisor.
     - If the user wants to trigger the Sentinel scanning system to check portfolio fluctuations and send email alerts: Delegate to market_sentinel.
+    - If the user wants to optimize their portfolio, draw the Efficient Frontier / CAL, allocate capital, or seek VN30 basket recommendations based on Markowitz MPT: Delegate to portfolio_optimizer.
     
     Start with a warm welcome to Mr.Híu and introduce the features you can assist with.
     Converse and respond in the preferred language specified by the system directive or matching the user's interaction (English or Tiếng Việt).""",
-    sub_agents=[portfolio_manager, wealth_advisor, market_sentinel]
+    sub_agents=[portfolio_manager, wealth_advisor, market_sentinel, portfolio_optimizer]
 )
 
 app = App(

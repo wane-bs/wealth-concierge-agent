@@ -17,6 +17,7 @@ flowchart TD
         Root <-->|Delegates portfolio tasks| PM[Portfolio Manager Agent]
         Root <-->|Delegates news & fundamental analysis| WA[Wealth Advisor Agent]
         Root <-->|Triggers market scans| MS[Market Sentinel Agent]
+        Root <-->|Delegates portfolio optimization| PO[Portfolio Optimizer Agent]
     end
 
     subgraph "Data & Protocol Layers"
@@ -24,6 +25,8 @@ flowchart TD
         WA <-->|Quotes / Ratios / News| VS[Vnstock Tools]
         MS -->|Live price scans| VS
         MS -->|Volatility Alerts| SMTP[Email Alert - SMTP]
+        PO <-->|Markowitz Optimization| OPT[MPT Solver - scipy/plotly]
+        OPT <-->|Historical Prices| VS
     end
 ```
 
@@ -41,6 +44,10 @@ flowchart TD
 ### 4. Market Sentinel Agent
 *   Monitors live stock prices in real-time.
 *   **Tools:** Initiates manual scans of the entire portfolio and calculates price deviations against the cost basis (`run_market_scan`). Automatically drafts professional HTML reports and sends them via email.
+
+### 5. Portfolio Optimizer Agent
+*   Calculates optimal asset allocations based on Modern Portfolio Theory (Markowitz MPT).
+*   **Tools:** Solves the GMV, Tangency, and Target portfolios (`optimize_portfolio`), and recommends the top 5 VN30 stocks based on historical Sharpe Ratio (`recommend_vn30_stocks`).
 
 ---
 
@@ -149,6 +156,7 @@ flowchart TD
         Root <-->|Chuyển giao việc quản lý danh mục| PM[Portfolio Manager Agent]
         Root <-->|Chuyển giao phân tích cơ bản/tin tức| WA[Wealth Advisor Agent]
         Root <-->|Kích hoạt quét báo giá| MS[Market Sentinel Agent]
+        Root <-->|Điều phối tối ưu danh mục| PO[Portfolio Optimizer Agent]
     end
 
     subgraph "Lớp dữ liệu & Giao thức"
@@ -156,6 +164,8 @@ flowchart TD
         WA <-->|Báo giá / Chỉ số / Tin tức| VS[Vnstock Tools]
         MS -->|Quét giá trực tiếp| VS
         MS -->|Cảnh báo vượt ngưỡng| SMTP[Email Alert - SMTP]
+        PO <-->|Tối ưu hóa Markowitz| OPT[Bộ giải MPT - scipy/plotly]
+        OPT <-->|Giá lịch sử| VS
     end
 ```
 
@@ -173,6 +183,10 @@ flowchart TD
 ### 4. Market Sentinel Agent
 *   Giám sát thị trường chứng khoán thời gian thực.
 *   **Công cụ (Tools):** Kích hoạt quét toàn bộ danh mục và tính toán biến động so với giá vốn (`run_market_scan`). Tự động soạn thảo báo cáo biến động bằng HTML và gửi tới email người dùng.
+
+### 5. Portfolio Optimizer Agent
+*   Tối ưu hóa cấu trúc danh mục tài sản dựa trên Lý thuyết Danh mục Đầu tư Hiện đại (Markowitz MPT).
+*   **Công cụ (Tools):** Giải bài toán GMV, Tangency, và Target portfolio (`optimize_portfolio`), đề xuất 5 mã cổ phiếu VN30 tối ưu nhất dựa trên Sharpe Ratio lịch sử (`recommend_vn30_stocks`).
 
 ---
 

@@ -1,20 +1,26 @@
 [
   {
-    "symbol": "FPT",
+    "symbol": "VIC",
+    "volume": 400,
+    "cost_basis": 225.3,
+    "alert_threshold": 3.0
+  },
+  {
+    "symbol": "LPB",
+    "volume": 2500,
+    "cost_basis": 55.6,
+    "alert_threshold": 3.0
+  },
+  {
+    "symbol": "STB",
     "volume": 1000,
-    "cost_basis": 65.0,
+    "cost_basis": 72.5,
     "alert_threshold": 3.0
   },
   {
-    "symbol": "VCB",
-    "volume": 500,
-    "cost_basis": 92.0,
+    "symbol": "MBB",
+    "volume": 7700,
+    "cost_basis": 24.75,
     "alert_threshold": 3.0
-  },
-  {
-    "symbol": "ACB",
-    "volume": 300,
-    "cost_basis": 22,
-    "alert_threshold": 8
   }
 ]

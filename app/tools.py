@@ -1,9 +1,76 @@
 import os
 import json
 import smtplib
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import vnstock as vs
+
+# Hỗ trợ Streamlit Caching an toàn
+def st_cache_data_if_available(ttl=None):
+    """Decorator tùy chỉnh để áp dụng st.cache_data nếu đang chạy trong tiến trình Streamlit."""
+    try:
+        from streamlit.runtime import exists as st_exists
+        if st_exists():
+            import streamlit as st
+            return st.cache_data(ttl=ttl)
+    except (ImportError, Exception):
+        pass
+    return lambda f: f
+
+@st_cache_data_if_available(ttl=60)
+def get_stock_quote_cached(symbol: str):
+    """Tải thông tin giá hiện tại và các chỉ số giao dịch trực tuyến thời gian thực từ vnstock."""
+    import time
+    m = vs.Market()
+    max_retries = 3
+    for retry in range(max_retries):
+        try:
+            df = m.equity(symbol).quote()
+            if df is not None and not df.empty:
+                # Giãn cách 0.5 giây sau mỗi cuộc gọi API thành công để tránh rate limit
+                time.sleep(0.5)
+                return df
+        except BaseException as e:
+            try:
+                from streamlit.runtime import exists as st_exists
+                if st_exists():
+                    import streamlit as st
+                    st.toast(f"⚠️ Chạm hạn mức API Vnstock khi lấy báo giá {symbol}. Đang chờ 60s để phục hồi...", icon="⏳")
+            except:
+                pass
+            if retry < max_retries - 1:
+                time.sleep(60.0)
+            else:
+                raise e
+    return None
+
+@st_cache_data_if_available(ttl=3600)
+def get_single_stock_historical_data_cached(symbol: str, start_date: str, end_date: str):
+    """Tải chuỗi dữ liệu giá đóng cửa lịch sử từ vnstock cho một mã cổ phiếu duy nhất."""
+    import time
+    m = vs.Market()
+    max_retries = 3
+    for retry in range(max_retries):
+        try:
+            df = m.equity(symbol).ohlcv(start=start_date, end=end_date, resolution="1D", count=1000)
+            if df is not None and not df.empty:
+                # Giãn cách 1.5 giây sau mỗi cuộc gọi API thành công để tránh rate limit
+                time.sleep(1.5)
+                return df
+        except BaseException as e:
+            try:
+                from streamlit.runtime import exists as st_exists
+                if st_exists():
+                    import streamlit as st
+                    st.toast(f"⚠️ Chạm hạn mức API Vnstock khi tải {symbol}. Đang chờ 60s để phục hồi...", icon="⏳")
+            except:
+                pass
+            if retry < max_retries - 1:
+                time.sleep(60.0)
+            else:
+                raise e
+    return None
 
 # Đường dẫn file danh mục
 PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), "portfolio.json")
@@ -105,9 +172,8 @@ def get_stock_quote(symbol: str) -> dict:
     """
     try:
         symbol = symbol.upper().strip()
-        m = vs.Market()
-        df = m.equity(symbol).quote()
-        if df.empty:
+        df = get_stock_quote_cached(symbol)
+        if df is None or df.empty:
             return {"status": "error", "message": f"Không có dữ liệu báo giá cho mã {symbol}."}
         # Chuyển đổi dòng đầu tiên thành dict
         quote_data = df.iloc[0].to_dict()
@@ -316,5 +382,337 @@ def run_market_scan() -> dict:
         else:
             return {"status": "success", "message": "Quét hoàn tất. Không có mã nào biến động vượt ngưỡng.", "alerts": []}
             
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def get_portfolio_historical_data(symbols: list) -> dict:
+    """Tải chuỗi dữ liệu giá đóng cửa lịch sử 2 năm gần nhất từ vnstock cho danh sách các mã cổ phiếu.
+    
+    Args:
+        symbols: Danh sách các mã cổ phiếu (ví dụ: ['FPT', 'VCB', 'ACB']).
+        
+    Returns:
+        dict: Chứa trạng thái, dữ liệu giá đóng cửa xoay chiều và cảnh báo nếu có mã thiếu dữ liệu.
+    """
+    try:
+        import numpy as np
+        import pandas as pd
+        import datetime
+        
+        if not symbols:
+            return {"status": "success", "prices": pd.DataFrame(), "warnings": []}
+            
+        end_date = datetime.date.today().strftime("%Y-%m-%d")
+        # 2 năm trước (khoảng 730 ngày)
+        start_date = (datetime.date.today() - datetime.timedelta(days=365 * 2)).strftime("%Y-%m-%d")
+        
+        prices_dict = {}
+        warnings = []
+        
+        for symbol in symbols:
+            symbol = symbol.upper().strip()
+            # Gọi hàm cached lấy dữ liệu lịch sử của mã đơn lẻ
+            try:
+                df = get_single_stock_historical_data_cached(symbol, start_date, end_date)
+                if df is None or df.empty:
+                    warnings.append(f"Không lấy được dữ liệu lịch sử cho mã {symbol}.")
+                    continue
+                
+                # Chuyển đổi định dạng thời gian
+                df['time'] = pd.to_datetime(df['time'])
+                df = df.sort_values('time')
+                
+                # Tìm cột giá đóng cửa (thường là 'close' trong vnstock)
+                if 'close' in df.columns:
+                    prices_dict[symbol] = df.set_index('time')['close']
+                else:
+                    warnings.append(f"Mã {symbol} không có cột giá đóng cửa 'close'.")
+                    
+                # Kiểm tra số ngày dữ liệu
+                days_count = len(df)
+                if days_count < 400:
+                    warnings.append(f"⚠️ Mã {symbol} chỉ có {days_count} ngày giao dịch lịch sử (ngắn hơn 2 năm). Ước lượng rủi ro-lợi nhuận có thể bị lệch.")
+            except BaseException as e:
+                warnings.append(f"Lỗi khi lấy dữ liệu cho mã {symbol}: {str(e)}")
+                
+        if not prices_dict:
+            return {"status": "error", "message": "Không thể tải dữ liệu lịch sử cho bất kỳ mã cổ phiếu nào.", "warnings": warnings}
+            
+        # Gộp các chuỗi giá thành một DataFrame chung
+        df_prices = pd.DataFrame(prices_dict)
+        # Điền các ngày thiếu bằng phương pháp forward fill rồi backward fill
+        df_prices = df_prices.ffill().bfill()
+        
+        return {"status": "success", "prices": df_prices, "warnings": warnings}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "warnings": []}
+
+def optimize_portfolio(symbols: list, risk_free_rate_annual: float = 2.5, target_return: float = None) -> dict:
+    """Tính toán tối ưu hóa danh mục theo lý thuyết Markowitz.
+    
+    Args:
+        symbols: Danh sách các mã cổ phiếu trong danh mục.
+        risk_free_rate_annual: Lãi suất phi rủi ro năm (%/năm, ví dụ: 2.5).
+        target_return: Lợi nhuận kỳ vọng mục tiêu (%/năm) nếu người dùng trượt chọn.
+        
+    Returns:
+        dict: Chứa trọng số tối ưu (GMV, Tangency, Target), ma trận hiệp phương sai, và Efficient Frontier.
+    """
+    try:
+        import numpy as np
+        import pandas as pd
+        from scipy.optimize import minimize
+        
+        # 1. Tải dữ liệu lịch sử
+        hist_res = get_portfolio_historical_data(symbols)
+        if hist_res["status"] != "success":
+            return hist_res
+            
+        df_prices = hist_res["prices"]
+        warnings = hist_res["warnings"]
+        
+        if df_prices.empty or len(df_prices.columns) < 2:
+            return {
+                "status": "error", 
+                "message": "Cần ít nhất 2 mã cổ phiếu có dữ liệu lịch sử để thực hiện tối ưu hóa danh mục.",
+                "warnings": warnings
+            }
+            
+        # Tính toán tỷ suất sinh lời log-return hàng ngày
+        df_returns = np.log(df_prices / df_prices.shift(1)).dropna()
+        
+        # Số lượng tài sản thực tế
+        actual_symbols = list(df_prices.columns)
+        num_assets = len(actual_symbols)
+        
+        # Tỷ suất sinh lời kỳ vọng hàng ngày và ma trận hiệp phương sai hàng ngày
+        mean_returns_daily = df_returns.mean()
+        cov_matrix_daily = df_returns.cov()
+        
+        # Quy đổi ra năm (annualized) - sử dụng 252 ngày giao dịch/năm
+        mean_returns_annual = mean_returns_daily * 252
+        cov_matrix_annual = cov_matrix_daily * 252
+        
+        # Lãi suất phi rủi ro năm
+        rf_annual = risk_free_rate_annual / 100.0
+        
+        # Hàm tính toán chỉ số thống kê danh mục
+        def portfolio_stats(weights):
+            weights = np.array(weights)
+            port_return = np.sum(mean_returns_annual * weights)
+            port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix_annual, weights)))
+            sharpe = (port_return - rf_annual) / port_vol if port_vol > 0 else 0
+            return port_return, port_vol, sharpe
+            
+        # Hàm mục tiêu tối thiểu hóa phương sai
+        def minimize_variance(weights):
+            return np.dot(weights.T, np.dot(cov_matrix_annual, weights))
+            
+        # Hàm mục tiêu tối đa hóa Sharpe Ratio (tối thiểu hóa số âm Sharpe)
+        def minimize_negative_sharpe(weights):
+            return -portfolio_stats(weights)[2]
+            
+        # Ràng buộc cơ bản: tổng trọng số = 1
+        constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+        # Giới hạn trọng số: W_i >= 0 và <= 1 (No short selling)
+        bounds = tuple((0, 1) for _ in range(num_assets))
+        # Khởi tạo trọng số ban đầu đều nhau
+        init_weights = num_assets * [1./num_assets]
+        
+        # --- A. Tối ưu danh mục GMV (Global Minimum Variance) ---
+        res_gmv = minimize(minimize_variance, init_weights, method='SLSQP', bounds=bounds, constraints=constraints)
+        weights_gmv = res_gmv.x
+        ret_gmv, vol_gmv, sharpe_gmv = portfolio_stats(weights_gmv)
+        
+        # --- B. Tối ưu danh mục Tangency (Max Sharpe) ---
+        res_tangency = minimize(minimize_negative_sharpe, init_weights, method='SLSQP', bounds=bounds, constraints=constraints)
+        weights_tangency = res_tangency.x
+        ret_tangency, vol_tangency, sharpe_tangency = portfolio_stats(weights_tangency)
+        
+        # --- C. Tính toán Đường biên hiệu quả (Efficient Frontier) ---
+        # Lấy dải lợi nhuận từ GMV return đến tối đa lợi nhuận của tài sản đơn lẻ
+        max_asset_return = mean_returns_annual.max()
+        min_frontier_ret = ret_gmv
+        max_frontier_ret = max(max_asset_return, ret_gmv + 0.05)
+        
+        frontier_returns = np.linspace(min_frontier_ret, max_frontier_ret, 50)
+        frontier_vols = []
+        frontier_weights = []
+        
+        for r in frontier_returns:
+            cons = (
+                {'type': 'eq', 'fun': lambda x: np.sum(x) - 1},
+                {'type': 'eq', 'fun': lambda x: np.sum(mean_returns_annual * x) - r}
+            )
+            res = minimize(minimize_variance, init_weights, method='SLSQP', bounds=bounds, constraints=cons)
+            if res.success:
+                frontier_vols.append(np.sqrt(res.fun))
+                frontier_weights.append(res.x)
+            else:
+                frontier_vols.append(None)
+                frontier_weights.append(None)
+                
+        # Lọc bỏ các điểm lỗi
+        valid_indices = [i for i, v in enumerate(frontier_vols) if v is not None]
+        frontier_returns = frontier_returns[valid_indices]
+        frontier_vols = np.array(frontier_vols)[valid_indices]
+        frontier_weights = [frontier_weights[i] for i in valid_indices]
+        
+        # --- D. Tính toán danh mục mục tiêu theo Slider (Target Portfolio) ---
+        weights_target = None
+        ret_target, vol_target, sharpe_target = None, None, None
+        if target_return is not None:
+            target_return_decimal = target_return / 100.0
+            cons_target = (
+                {'type': 'eq', 'fun': lambda x: np.sum(x) - 1},
+                {'type': 'eq', 'fun': lambda x: np.sum(mean_returns_annual * x) - target_return_decimal}
+            )
+            res_target = minimize(minimize_variance, init_weights, method='SLSQP', bounds=bounds, constraints=cons_target)
+            if res_target.success:
+                weights_target = res_target.x
+                ret_target, vol_target, sharpe_target = portfolio_stats(weights_target)
+            else:
+                # Nếu vượt quá giới hạn của biên hiệu quả, dùng Tangency làm fallback
+                weights_target = weights_tangency
+                ret_target, vol_target, sharpe_target = ret_tangency, vol_tangency, sharpe_tangency
+                
+        # Chuẩn bị dữ liệu tài sản đơn lẻ để vẽ đồ thị
+        individual_assets = []
+        for i, symbol in enumerate(actual_symbols):
+            individual_assets.append({
+                "symbol": symbol,
+                "return": float(mean_returns_annual.iloc[i] * 100.0),
+                "volatility": float(np.sqrt(cov_matrix_annual.iloc[i, i]) * 100.0)
+            })
+            
+        return {
+            "status": "success",
+            "symbols": actual_symbols,
+            "warnings": warnings,
+            "individual_assets": individual_assets,
+            "gmv": {
+                "weights": [float(w) for w in weights_gmv],
+                "return": float(ret_gmv * 100.0),
+                "volatility": float(vol_gmv * 100.0),
+                "sharpe": float(sharpe_gmv)
+            },
+            "tangency": {
+                "weights": [float(w) for w in weights_tangency],
+                "return": float(ret_tangency * 100.0),
+                "volatility": float(vol_tangency * 100.0),
+                "sharpe": float(sharpe_tangency)
+            },
+            "target": {
+                "weights": [float(w) for w in weights_target] if weights_target is not None else None,
+                "return": float(ret_target * 100.0) if ret_target is not None else None,
+                "volatility": float(vol_target * 100.0) if vol_target is not None else None,
+                "sharpe": float(sharpe_target) if sharpe_target is not None else None
+            } if target_return is not None else None,
+            "frontier": {
+                "returns": [float(r * 100.0) for r in frontier_returns],
+                "volatilities": [float(v * 100.0) for v in frontier_vols],
+                "weights": [[float(wi) for wi in w] for w in frontier_weights]
+            },
+            "cov_matrix": [[float(cov_matrix_annual.iloc[i, j]) for j in range(num_assets)] for i in range(num_assets)]
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"Lỗi tối ưu hóa danh mục: {str(e)}", "warnings": []}
+
+def recommend_vn30_stocks(risk_free_rate_annual: float = 2.5, progress_callback=None) -> dict:
+    """Tải dữ liệu VN30 động, tính Sharpe Ratio lịch sử 2 năm và đề xuất 5 cổ phiếu tối ưu nhất.
+    
+    Args:
+        risk_free_rate_annual: Lãi suất phi rủi ro năm (ví dụ: 2.5).
+        progress_callback: Hàm callback cập nhật tiến độ cho Streamlit (progress, text).
+        
+    Returns:
+        dict: Chứa danh sách 5 cổ phiếu đề xuất cùng các chỉ số của chúng.
+    """
+    try:
+        import numpy as np
+        import pandas as pd
+        import datetime
+        
+        # Tải danh sách rổ VN30 động từ Vnstock
+        try:
+            listing = vs.Listing()
+            vn30_series = listing.symbols_by_group('VN30')
+            if vn30_series is not None and not vn30_series.empty:
+                vn30_symbols = vn30_series.tolist()
+            else:
+                raise ValueError("Danh sách VN30 lấy từ Vnstock bị trống.")
+        except Exception as e:
+            # Fallback tĩnh đầy đủ 30 mã VN30 chuẩn xác nếu API lấy danh sách gặp lỗi
+            vn30_symbols = [
+                "ACB", "BID", "BSR", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG", "LPB", 
+                "MBB", "MSN", "MWG", "PLX", "SAB", "SHB", "SSB", "SSI", "STB", "TCB", 
+                "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VPL", "VRE"
+            ]
+        
+        end_date = datetime.date.today().strftime("%Y-%m-%d")
+        start_date = (datetime.date.today() - datetime.timedelta(days=365 * 2)).strftime("%Y-%m-%d")
+        
+        prices_dict = {}
+        warnings = []
+        
+        total_symbols = len(vn30_symbols)
+        for i, symbol in enumerate(vn30_symbols):
+            symbol = symbol.upper().strip()
+            
+            if progress_callback:
+                progress_callback(float(i) / total_symbols, f"Đang kiểm tra/tải dữ liệu cho mã {symbol} ({i+1}/{total_symbols})...")
+            
+            try:
+                df = get_single_stock_historical_data_cached(symbol, start_date, end_date)
+                if df is not None and not df.empty and 'close' in df.columns:
+                    df['time'] = pd.to_datetime(df['time'])
+                    df = df.sort_values('time')
+                    prices_dict[symbol] = df.set_index('time')['close']
+                else:
+                    warnings.append(f"Mã {symbol} không có dữ liệu close.")
+            except BaseException as e:
+                warnings.append(f"Lỗi khi lấy dữ liệu cho mã {symbol}: {str(e)}")
+        
+        if progress_callback:
+            progress_callback(1.0, "Đang xử lý tính toán Sharpe Ratio cho rổ VN30...")
+            
+        if not prices_dict:
+            return {"status": "error", "message": "Không thể tải dữ liệu lịch sử cho bất kỳ mã VN30 nào.", "warnings": warnings}
+            
+        df_prices = pd.DataFrame(prices_dict).ffill().bfill()
+        df_returns = np.log(df_prices / df_prices.shift(1)).dropna()
+        
+        mean_returns_annual = df_returns.mean() * 252
+        std_returns_annual = df_returns.std() * np.sqrt(252)
+        rf_annual = risk_free_rate_annual / 100.0
+        
+        sharpe_ratios = (mean_returns_annual - rf_annual) / std_returns_annual
+        
+        df_metrics = pd.DataFrame({
+            "symbol": df_prices.columns,
+            "return": mean_returns_annual.values * 100.0,
+            "volatility": std_returns_annual.values * 100.0,
+            "sharpe": sharpe_ratios.values
+        })
+        
+        # Sắp xếp giảm dần theo Sharpe Ratio
+        df_metrics = df_metrics.sort_values("sharpe", ascending=False)
+        top_5 = df_metrics.head(5).to_dict(orient="records")
+        
+        return {"status": "success", "recommendations": top_5, "warnings": warnings}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def clear_portfolio() -> dict:
+    """Xóa toàn bộ danh sách cổ phiếu trong danh mục đầu tư cá nhân.
+    
+    Returns:
+        dict: Kết quả thực hiện.
+    """
+    try:
+        if os.path.exists(PORTFOLIO_FILE):
+            with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
+                json.dump([], f, indent=2, ensure_ascii=False)
+        return {"status": "success", "message": "Đã xóa toàn bộ danh mục đầu tư hiện có."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
