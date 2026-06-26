@@ -104,7 +104,7 @@ TRANSLATIONS = {
         "no_alert_found": "No stock exceeded the alert threshold.",
         "vn30_analysis_desc": "Download 2-year VN30 historical data and select 5 stocks with the best Sharpe Ratio for capital allocation simulation.",
         "vn30_top5_header": "📊 **Top 5 Best Recommended VN30 Stocks:**",
-        "vn30_allocation_summary": "📊 **Allocation Summary:** \n* Allocation Type: `{alloc_type}`\n* Total Capital: **{cap_val:,.0f} VND** | Actual Allocated: **{actual_total_spent_k * 1000:,.0f} VND**\n* Remaining Cash (lot of 100): **{remaining_cash_k * 1000:,.0f} VND**",
+        "vn30_allocation_summary": "📊 **Allocation Summary:** \n* Allocation Type: `{alloc_type}`\n* Total Capital: **{cap_val:,.0f} VND** | Actual Allocated: **{actual_allocated:,.0f} VND**\n* Remaining Cash (lot of 100): **{remaining_cash:,.0f} VND**",
         "vn30_frontier_desc": "📈 **VN30 Efficient Frontier:** Expected risk from **{min_risk:.2f}%** to **{max_risk:.2f}%**.",
         "suggest_adjust_risk": "🛡️ **Note:** With risk ceiling **{ceiling:.2f}%**, the maximum expected return from this pool is **{suggested_ep:.2f}%** (your target Ep is **{target_ep:.2f}%**).",
         "individual_assets_plot": "Individual Assets",
@@ -231,7 +231,7 @@ TRANSLATIONS = {
         "no_alert_found": "Không có mã cổ phiếu nào vượt ngưỡng cảnh báo.",
         "vn30_analysis_desc": "Tải dữ liệu lịch sử 2 năm từ Vnstock cho rổ VN30 và chọn ra 5 mã có hiệu suất sinh lời trên rủi ro (Sharpe) tốt nhất để mô phỏng phân bổ vốn.",
         "vn30_top5_header": "📊 **5 cổ phiếu VN30 đề xuất tốt nhất:**",
-        "vn30_allocation_summary": "📊 **Tổng kết phân bổ:** \n* Loại phân bổ: `{alloc_type}`\n* Tổng vốn: **{cap_val:,.0f} VNĐ** | Phân bổ thực tế: **{actual_total_spent_k * 1000:,.0f} VNĐ**\n* Tiền mặt còn lại (lô chẵn 100): **{remaining_cash_k * 1000:,.0f} VNĐ**",
+        "vn30_allocation_summary": "📊 **Tổng kết phân bổ:** \n* Loại phân bổ: `{alloc_type}`\n* Tổng vốn: **{cap_val:,.0f} VNĐ** | Phân bổ thực tế: **{actual_allocated:,.0f} VNĐ**\n* Tiền mặt còn lại (lô chẵn 100): **{remaining_cash:,.0f} VNĐ**",
         "vn30_frontier_desc": "📈 **Biên hiệu quả VN30:** Rủi ro dự kiến từ **{min_risk:.2f}%** đến **{max_risk:.2f}%**.",
         "suggest_adjust_risk": "🛡️ **Chú thích:** Với trần rủi ro **{ceiling:.2f}%**, tỷ suất sinh lời tối đa khả thi từ rổ này là **{suggested_ep:.2f}%** (Ep hiện tại của anh là **{target_ep:.2f}%**).",
         "individual_assets_plot": "Cổ phiếu đơn lẻ",
@@ -753,8 +753,8 @@ with tab_mpt:
                 t["vn30_allocation_summary"].format(
                     alloc_type=alloc_type,
                     cap_val=cap_val,
-                    actual_total_spent_k=actual_total_spent_k,
-                    remaining_cash_k=remaining_cash_k
+                    actual_allocated=actual_total_spent_k * 1000,
+                    remaining_cash=remaining_cash_k * 1000
                 )
             )
             
