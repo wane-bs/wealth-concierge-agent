@@ -129,8 +129,11 @@ The system is fully designed with bilingual capabilities (**English** and **Viet
 The project adheres strictly to Zero-Trust data privacy guidelines:
 1. **Credentials Isolation**: API keys and SMTP credentials are loaded dynamically from `app/.env` (excluded from VCS via `.gitignore`).
 2. **Local Data Privacy**: Asset data remains locally on the user's filesystem in `app/portfolio.json`. No data is uploaded or synced to external servers.
-3. **Input Sanitization**: User-entered stock tickers are stripped and capitalized to avoid injection vulnerabilities.
-4. **Crash Resistance**: All network calls, file reads, and email connections are protected with robust exception handling blocks.
+3. **Input Sanitization & Validation**: Inputs are validated and sanitized at the tools layer:
+   - User-entered stock tickers are validated against a strict regex pattern `^[A-Z0-9]{3,6}$` and standardized to upper case to avoid injection vulnerabilities.
+   - Numeric fields (volume, cost basis, threshold) are checked to ensure they are strictly positive numbers (>0) to avoid division-by-zero or math errors during portfolio optimization.
+4. **Least Privilege Tool Registry (Prompt Injection Mitigation)**: The email alerting tool `send_email_alert` is decoupled from the LLM agent's registered tool list. The agent cannot send arbitrary emails; it can only invoke `run_market_scan`, which sends automated reports exclusively to the pre-configured `RECIPIENT_EMAIL`, preventing unauthorized use or spam via prompt injection.
+5. **Crash Resistance**: All network calls, file reads, and email connections are protected with robust exception handling blocks.
 
 ---
 ---
@@ -268,5 +271,8 @@ Hệ thống được thiết kế hỗ trợ song ngữ hoàn toàn (**Tiếng 
 Dự án tuân thủ nghiêm ngặt tiêu chuẩn bảo mật dữ liệu và an toàn hệ thống (Zero-Trust):
 1. **Cô lập thông tin nhạy cảm (Credentials Isolation)**: Không ghi cứng bất kỳ API Key, thông tin tài khoản SMTP hay mật khẩu nào trong mã nguồn. Mọi cấu hình bảo mật được nạp từ biến môi trường thông qua tệp cục bộ [app/.env](file:///f:/capstone/wealth-concierge-agent/app/.env) đã được định cấu hình trong `.gitignore` để không bị lộ lọt khi đẩy lên các kho lưu trữ công khai như GitHub.
 2. **Lưu trữ dữ liệu nội bộ (Local Data Privacy)**: Dữ liệu danh mục tài sản cá nhân được quản lý cục bộ thông qua tệp [app/portfolio.json](file:///f:/capstone/wealth-concierge-agent/app/portfolio.json) của người dùng. Hệ thống không sử dụng hoặc đồng bộ dữ liệu này lên bất kỳ máy chủ bên thứ ba nào ngoại trừ việc tương tác trực tuyến với thư viện Vnstock để lấy báo giá thị trường công khai.
-3. **Phòng chống lỗi đầu vào (Input Sanitization)**: Mọi mã cổ phiếu do người dùng nhập từ giao diện UI hoặc hội thoại Chatbot đều được chuẩn hóa (chuyển chữ hoa, loại bỏ khoảng trắng) và xác thực kiểu dữ liệu nghiêm ngặt trước khi ghi nhận để phòng tránh các lỗi định dạng hoặc tấn công chèn mã độc.
-4. **Kiểm tra an toàn thực thi**: Toàn bộ luồng xử lý I/O tệp tin, giao tiếp mạng (Vnstock API) và kết nối SMTP đều được bao bọc trong các khối xử lý ngoại lệ (`try-except`) giúp hệ thống vận hành bền bỉ và không gây sập ứng dụng (crash-resistant).
+3. **Phòng chống lỗi đầu vào & Kiểm định (Input Validation)**: Dữ liệu đầu vào được xác thực chặt chẽ tại tầng custom tools:
+   - Mã cổ phiếu được chuẩn hóa (viết hoa, loại bỏ khoảng trắng) và bắt buộc kiểm định khớp với mẫu Regex `^[A-Z0-9]{3,6}$` để ngăn chặn các lỗi chèn ký tự đặc biệt hoặc tấn công chèn tham số độc hại.
+   - Các tham số số lượng (`volume`), giá vốn (`cost_basis`) và ngưỡng cảnh báo (`alert_threshold`) được chuyển đổi số an toàn và bắt buộc phải lớn hơn 0, triệt tiêu hoàn toàn các lỗi chia cho không hoặc dữ liệu phi lý khi chạy thuật toán tối ưu hóa.
+4. **Ủy quyền Quyền tối thiểu (Least Privilege - Chống Prompt Injection)**: Công cụ gửi email cảnh báo tài chính `send_email_alert` được tách biệt, không đăng ký trực tiếp trong danh sách công cụ (`tools`) mà AI Agent được phép gọi trong `app/agent.py`. AI Agent chỉ có thể yêu cầu tiến trình quét Sentinel `run_market_scan`, hệ thống này tự động soạn thư và gửi cố định đến địa chỉ `RECIPIENT_EMAIL` của người dùng. Điều này ngăn chặn việc kẻ xấu khai thác Prompt Injection để biến AI thành công cụ phát tán thư rác hoặc gửi dữ liệu ra bên ngoài.
+5. **Kiểm tra an toàn thực thi**: Toàn bộ luồng xử lý I/O tệp tin, giao tiếp mạng (Vnstock API) và kết nối SMTP đều được bao bọc trong các khối xử lý ngoại lệ (`try-except`) giúp hệ thống vận hành bền bỉ và không gây sập ứng dụng (crash-resistant).

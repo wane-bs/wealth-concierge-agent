@@ -437,13 +437,28 @@ if user_input:
                         role="user", parts=[types.Part.from_text(text=system_prefix + user_input)]
                     )
                     
-                    events = list(
-                        st.session_state.runner.run(
-                            new_message=message,
-                            user_id="default_user",
-                            session_id=st.session_state.session.id,
-                        )
-                    )
+                    events = None
+                    max_retries = 3
+                    retry_delay = 2.0
+                    for attempt in range(max_retries):
+                        try:
+                            events = list(
+                                st.session_state.runner.run(
+                                    new_message=message,
+                                    user_id="default_user",
+                                    session_id=st.session_state.session.id,
+                                )
+                            )
+                            break
+                        except Exception as e:
+                            # Tự động thử lại nếu gặp lỗi 503 UNAVAILABLE từ API Gemini
+                            is_transient = any(code in str(e) for code in ["503", "UNAVAILABLE", "502", "504", "429"])
+                            if is_transient and attempt < max_retries - 1:
+                                time.sleep(retry_delay)
+                                retry_delay *= 2
+                                continue
+                            else:
+                                raise e
                     
                     response_texts = []
                     for event in events:
@@ -562,7 +577,7 @@ with tab_view:
                     t["headers"]["Lãi/Lỗ (%)"]: "{:+.2f}%",
                     t["headers"]["Ngưỡng cảnh báo (%)"]: "±{:.1f}%"
                 }).map(highlight_pl, subset=[t["headers"]["Lãi/Lỗ (k VNĐ)"], t["headers"]["Lãi/Lỗ (%)"]]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
             
@@ -692,7 +707,7 @@ with tab_mpt:
                 t["headers_recs"]["return"]: "{:.2f}%",
                 t["headers_recs"]["volatility"]: "{:.2f}%",
                 t["headers_recs"]["sharpe"]: "{:.4f}"
-            }), use_container_width=True, hide_index=True)
+            }), width="stretch", hide_index=True)
             
             # Chạy MPT trên 5 mã này
             symbols_recs = [item["symbol"] for item in recs]
@@ -746,7 +761,7 @@ with tab_mpt:
                 t["headers_alloc"]["Số lượng phân bổ"]: "{:,}",
                 t["headers_alloc"]["Giá hiện tại (k VNĐ)"]: "{:,.2f}",
                 t["headers_alloc"]["Giá trị phân bổ (k VNĐ)"]: "{:,.2f}"
-            }), use_container_width=True, hide_index=True)
+            }), width="stretch", hide_index=True)
             
             remaining_cash_k = cap_val_k - actual_total_spent_k
             st.write(
@@ -905,7 +920,7 @@ with tab_mpt:
                 template="plotly_dark",
                 height=500
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
     else:
         st.info(t["opt_port_warning"])
 
@@ -950,7 +965,7 @@ with tab_rebalance:
                     "Sai lệch tỷ trọng": f"{diff*100:+.2f}%"
                 })
             df_comp = pd.DataFrame(df_comp_data).rename(columns=t["headers_comp"])
-            st.dataframe(df_comp, use_container_width=True, hide_index=True)
+            st.dataframe(df_comp, width="stretch", hide_index=True)
             
             # Tạo chi tiết giao dịch
             for idx_i, symbol in enumerate(symbols_list_reb):
@@ -1019,7 +1034,7 @@ with tab_rebalance:
                         t["headers_preview"]["Đơn giá hiện tại (k VNĐ)"]: "{:,.2f}",
                         t["headers_preview"]["Giá vốn cũ (k VNĐ)"]: "{:,.2f}",
                         t["headers_preview"]["Giá vốn mới (k VNĐ)"]: "{:,.2f}"
-                    }), use_container_width=True, hide_index=True)
+                    }), width="stretch", hide_index=True)
                     
                     confirm_rebalance = st.checkbox(t["confirm_rebalance_checkbox"], key="chk_confirm_rebalance_main")
                     if st.button(t["execute_rebalance_btn"], type="primary", disabled=not confirm_rebalance, key="btn_execute_rebalance_main"):

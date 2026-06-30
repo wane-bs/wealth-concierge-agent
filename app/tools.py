@@ -2,9 +2,16 @@ import os
 import json
 import smtplib
 import time
+import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import vnstock as vs
+
+def validate_symbol(symbol: str) -> bool:
+    """Xác thực mã chứng khoán (chỉ gồm 3-6 ký tự chữ và số)."""
+    if not isinstance(symbol, str):
+        return False
+    return bool(re.match(r"^[A-Z0-9]{3,6}$", symbol.upper().strip()))
 
 # Hỗ trợ Streamlit Caching an toàn
 def st_cache_data_if_available(ttl=None):
@@ -102,6 +109,22 @@ def add_to_portfolio(symbol: str, volume: int, cost_basis: float, alert_threshol
     Returns:
         dict: Kết quả thực hiện.
     """
+    if not validate_symbol(symbol):
+        return {"status": "error", "message": f"Mã chứng khoán không hợp lệ: '{symbol}'. Mã phải từ 3 đến 6 ký tự chữ và số."}
+    try:
+        volume = int(volume)
+        cost_basis = float(cost_basis)
+        alert_threshold = float(alert_threshold)
+    except (ValueError, TypeError):
+        return {"status": "error", "message": "Các tham số số lượng, giá vốn và ngưỡng cảnh báo phải có kiểu số hợp lệ."}
+
+    if volume <= 0:
+        return {"status": "error", "message": "Số lượng cổ phiếu phải là số nguyên dương lớn hơn 0."}
+    if cost_basis <= 0:
+        return {"status": "error", "message": "Giá vốn mua vào phải lớn hơn 0."}
+    if alert_threshold <= 0:
+        return {"status": "error", "message": "Ngưỡng cảnh báo biến động phải lớn hơn 0."}
+
     try:
         symbol = symbol.upper().strip()
         portfolio = []
@@ -142,6 +165,8 @@ def remove_from_portfolio(symbol: str) -> dict:
     Returns:
         dict: Kết quả thực hiện.
     """
+    if not validate_symbol(symbol):
+        return {"status": "error", "message": f"Mã chứng khoán không hợp lệ: '{symbol}'."}
     try:
         symbol = symbol.upper().strip()
         if not os.path.exists(PORTFOLIO_FILE):
@@ -170,6 +195,8 @@ def get_stock_quote(symbol: str) -> dict:
     Returns:
         dict: Chứa dữ liệu báo giá trực tiếp từ thị trường.
     """
+    if not validate_symbol(symbol):
+        return {"status": "error", "message": f"Mã chứng khoán không hợp lệ: '{symbol}'."}
     try:
         symbol = symbol.upper().strip()
         df = get_stock_quote_cached(symbol)
@@ -194,6 +221,8 @@ def get_stock_news(symbol: str) -> dict:
     Returns:
         dict: Chứa danh sách tin tức mới nhất.
     """
+    if not validate_symbol(symbol):
+        return {"status": "error", "message": f"Mã chứng khoán không hợp lệ: '{symbol}'."}
     try:
         symbol = symbol.upper().strip()
         ref = vs.Reference()
@@ -216,6 +245,8 @@ def get_financial_ratios(symbol: str) -> dict:
     Returns:
         dict: Báo cáo chỉ số tài chính 4 kỳ gần nhất.
     """
+    if not validate_symbol(symbol):
+        return {"status": "error", "message": f"Mã chứng khoán không hợp lệ: '{symbol}'."}
     try:
         symbol = symbol.upper().strip()
         f = vs.Fundamental()
@@ -409,8 +440,17 @@ def get_portfolio_historical_data(symbols: list) -> dict:
         prices_dict = {}
         warnings = []
         
-        for symbol in symbols:
-            symbol = symbol.upper().strip()
+        validated_symbols = []
+        for s in symbols:
+            if validate_symbol(s):
+                validated_symbols.append(s.upper().strip())
+            else:
+                warnings.append(f"Mã chứng khoán '{s}' không hợp lệ và bị bỏ qua.")
+                
+        if not validated_symbols:
+            return {"status": "error", "message": "Không có mã cổ phiếu hợp lệ nào để tải dữ liệu.", "warnings": warnings}
+            
+        for symbol in validated_symbols:
             # Gọi hàm cached lấy dữ liệu lịch sử của mã đơn lẻ
             try:
                 df = get_single_stock_historical_data_cached(symbol, start_date, end_date)
@@ -458,6 +498,16 @@ def optimize_portfolio(symbols: list, risk_free_rate_annual: float = 2.5, target
     Returns:
         dict: Chứa trọng số tối ưu (GMV, Tangency, Target), ma trận hiệp phương sai, và Efficient Frontier.
     """
+    try:
+        risk_free_rate_annual = float(risk_free_rate_annual)
+        if target_return is not None:
+            target_return = float(target_return)
+    except (ValueError, TypeError):
+        return {"status": "error", "message": "Lãi suất phi rủi ro và lợi nhuận mục tiêu phải có kiểu số hợp lệ."}
+        
+    if risk_free_rate_annual < 0:
+        return {"status": "error", "message": "Lãi suất phi rủi ro không thể âm."}
+
     try:
         import numpy as np
         import pandas as pd
